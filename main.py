@@ -22,11 +22,8 @@ def extract_zip(file_name):
     print(f'finished extracting {file_name}')
 
 
-def extract_all_zip_files():
+def extract_all_zip_files(dir_path):
     zip_files = []
-    dir_path = None
-    if len(sys.argv) > 1:
-        dir_path = sys.argv[1]
     os.chdir('\\'.join([os.getcwd(), dir_path]))
     create_folder_per_zip(zip_files)
     threads = [Thread(target=extract_zip, args=(file,)) for file in zip_files]
@@ -36,7 +33,7 @@ def extract_all_zip_files():
         thread.join()
 
 
-def unite_all_files_recuresive():
+def unite_all_files_recursive():
     root_path = os.getcwd()
     for root, dirs, files in os.walk(root_path, topdown=False):
         for file in files:
@@ -51,15 +48,24 @@ def unite_all_files_recuresive():
             os.remove(os.path.join(root, name))
         for name in dirs:
             os.rmdir(os.path.join(root, name))
-    for name in dirs: # delete the remaining empty folders in the root directory
-        os.rmdir(os.path.join(root, name))
+    # for name in dirs:  # delete the remaining empty folders in the root directory
+    #     os.rmdir(os.path.join(root, name))
 
 
 def main():
-    t1 = Thread(target=extract_all_zip_files, args=())
+    dir_path = '.'
+    if len(sys.argv) > 1:
+        dir_path = sys.argv[1]
+    user_input = 'n'
+    while user_input != 'y':
+        user_input = input(f'\nare you sure you wish to perform this action on the files at {os.path.join(os.getcwd(), dir_path)}'
+                           f'\n enter y/n: ').lower()
+        if user_input == 'n':
+            exit(0)
+    t1 = Thread(target=extract_all_zip_files, args=(dir_path,))
     t1.start()
     t1.join()
-    unite_all_files_recuresive()
+    unite_all_files_recursive()
     print("finished")
 
 
