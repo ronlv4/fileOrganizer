@@ -4,6 +4,8 @@ import os, sys, zipfile
 from threading import Thread
 from pathlib import Path
 
+verbose_print = lambda *a: None
+
 
 class Format:
     RED = '\033[91m'
@@ -41,7 +43,7 @@ def extract_zip(file_name):
 
 def get_zip_files_list(dir_path, zip_files_names_list):
     zip_files_names_list[:] = [file[:-4] for file in os.listdir(dir_path) if file.endswith('.zip')]
-    print(f'found {len(zip_files_names_list)} zip files')
+    verbose_print(f'found {len(zip_files_names_list)} zip files', 'another string')
 def extract_all_zip_files(dir_path):
     create_folder_per_zip(zip_files)
     threads = [Thread(target=extract_zip, args=(file,)) for file in zip_files]
@@ -81,21 +83,22 @@ def get_user_confirmation(dir_path):
         user_input = input(f'Are you sure you wish to perform this action on the files at {os.path.join(os.getcwd(), dir_path)}\n{Format.YELLOW}enter y/n: {Format.NOCOLOR}').lower()
         if user_input == 'n':
             exit(0)
-
 def parse_arguments():
     parser = argparse.ArgumentParser(description=f'{Format.GREEN}Originally made to organize "Google takeout" photos and videos into a single directory{Format.NOCOLOR}')
     parser.usage = f'{Format.RED}organize.py <path to directory containing zip files>{Format.NOCOLOR}'
     parser.add_argument('dir_path', type=str, help='path to directory containing zip files')
     parser.add_argument('-t', '--threads', type=int, default=3, help='number of threads to use')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose mode')
-    args = parser.parse_args()
-    if not 1 <= args.threads < 10:
+    arguments = parser.parse_args()
+    global verbose_print
+    if arguments.verbose:
+        verbose_print = lambda *args: print(', '.join(args))
+    if not 1 <= arguments.threads < 10:
         print(f'{Format.RED}number of threads must be between 1 and 10{Format.NOCOLOR}')
         exit(1)
-    return args
+    return arguments
 def main():
     args = parse_arguments()
-    exit(0)
     dir_path = Path(args.dir_path)
     zip_files_names_list = []
     get_user_confirmation(dir_path)
