@@ -1,10 +1,16 @@
 #!/usr/bin/python
+
 import argparse
-import os, sys, zipfile
-from threading import Thread
+import errno
+import os
+import zipfile
 from pathlib import Path
+from threading import Thread
+from typing import List
 
 verbose_print = lambda *a: None
+dir_path: Path
+num_of_threads: int
 
 
 class Format:
@@ -42,15 +48,16 @@ def extract_zip(file_name):
     print(f'finished extracting {file_name}')
 
 
-def get_zip_files_list(dir_path: Path, zip_path_list):
+def get_zip_files_list(zip_path_list: List[Path]):
     verbose_print(f'getting zip files list from {dir_path}')
     zip_path_list[:] = [dir_path / Path(file_name) for file_name in os.listdir(dir_path) if file_name.endswith('.zip')]
     verbose_print(f'found {len(zip_path_list)} zip files')
 
 
-def get_threads_list(zip_path_list, num_of_threads):
+def get_threads_list(zip_path_list: List[Path]):
     min_zip_files_per_thread = len(zip_path_list) // num_of_threads
-    zip_files_groups = [zip_path_list[i * min_zip_files_per_thread:(i + 1) * min_zip_files_per_thread] for i in range(0, num_of_threads)]
+    zip_files_groups = [zip_path_list[i * min_zip_files_per_thread:(i + 1) * min_zip_files_per_thread] for i in
+                        range(0, num_of_threads)]
     for i in range(len(zip_path_list) % num_of_threads):
         zip_files_groups[i].append(zip_path_list[-(i + 1)])
     verbose_print(f'min zip files per thread: {min_zip_files_per_thread}')
@@ -59,15 +66,15 @@ def get_threads_list(zip_path_list, num_of_threads):
     return [Thread(target=extract_group_of_zip_files, args=(zip_files_group,)) for zip_files_group in zip_files_groups]
 
 
-def extract_group_of_zip_files(zip_path_list):
+def extract_group_of_zip_files(zip_path_list: List[Path]):
     for zip_path in zip_path_list:
         extract_zip(zip_path)
 
 
-def extract_all_zip_files(zip_path_list, num_of_threads):
+def extract_all_zip_files(zip_path_list: List[Path]):
     verbose_print(f'extracting {len(zip_path_list)} zip files')
     verbose_print(f'using {num_of_threads} threads')
-    threads = get_threads_list(zip_path_list, num_of_threads)
+    threads = get_threads_list(zip_path_list)
     verbose_print(f'created {len(threads)} threads')
     verbose_print('starting threads')
     for thread in threads:
@@ -77,23 +84,18 @@ def extract_all_zip_files(zip_path_list, num_of_threads):
 
 
 def unite_all_files_recursive():
-    root_path = os.getcwd()
-    for root, dirs, files in os.walk(root_path, topdown=False):
+    for root, dirs, files in os.walk(dir_path, topdown=False):
+        root = Path(root)
         for file in files:
             try:
-                os.rename(os.path.join(root, file), '\\'.join([root_path, file]))
-            except OSError:
-                pass
-    for root, dirs, files in os.walk(root_path,
-                                     topdown=False):  # deleting all the files (and directories) that werent moved because they caused exceptions
-        if root == root_path:
-            continue
-        for name in files:
-            os.remove(os.path.join(root, name))
-        for name in dirs:
-            os.rmdir(os.path.join(root, name))
-    # for name in dirs:  # delete the remaining empty folders in the root directory
-    #     os.rmdir(os.path.join(root, name))
+                os.rename(root.joinpath(file), dir_path.joinpath(file))
+            except OSError as e:
+                if e.errno == errno.EEXIST:
+                    os.remove(e.filename)
+        for dir in dirs:
+            dir = Path(root).joinpath(dir)
+            if not os.listdir(dir):
+                os.rmdir(dir)
 
 
 def print_usage_and_exit():
@@ -101,11 +103,11 @@ def print_usage_and_exit():
     exit(1)
 
 
-def get_user_confirmation(dir_path):
+def get_user_confirmation(message):
     user_input = 'n'
     while user_input != 'y':
-        user_input = input(
-            f'Are you sure you wish to perform this action on the files at {os.path.join(os.getcwd(), dir_path)}\n{Format.YELLOW}enter y/n: {Format.NOCOLOR}').lower()
+        print(message)
+        user_input = input(f'{Format.YELLOW}enter y/n: {Format.NOCOLOR}').lower()
         if user_input == 'n':
             exit(0)
 
@@ -118,29 +120,33 @@ def parse_arguments():
     parser.add_argument('-t', '--threads', type=int, default=3, help='number of threads to use')
     parser.add_argument('-v', '--verbose', action='store_true', help='verbose mode')
     arguments = parser.parse_args()
-    global verbose_print
+    global verbose_print, dir_path, num_of_threads
+    dir_path = Path(arguments.dir_path)
+    num_of_threads = arguments.threads
     if arguments.verbose:
         verbose_print = lambda *args: print(', '.join(args))
     if not 1 <= arguments.threads <= 10:
         print(f'{Format.RED}number of threads must be between 1 and 10{Format.NOCOLOR}')
         exit(1)
-    return arguments
 
+
+def delete_original_zip_files(zip_files_list: List[Path]):
+    get_user_confirmation(message=f'{Format.BOLD}Would you like to delete the zip files?{Format.NOCOLOR}')
+    for zip_path in zip_files_list:
+        os.remove(zip_path)
+    print(f'{Format.GREEN}deleted {len(zip_files_list)} zip files{Format.NOCOLOR}')
 
 
 def main():
-    args = parse_arguments()
-    dir_path = Path(args.dir_path)
+    parse_arguments()
     zip_files_list = []
-    # get_user_confirmation(dir_path)
-    get_zip_files_list(dir_path, zip_files_list)
-    # t1 = Thread(target=extract_all_zip_files, args=(dir_path,))
-    extract_all_zip_files(zip_files_list, args.threads)
-    exit(0)
-    # t1.start()
-    # t1.join()
+    get_user_confirmation(message=f'Are you sure you wish to perform this action on the files at {dir_path}?')
+    get_zip_files_list(zip_files_list)
+    extract_all_zip_files(zip_files_list)
     unite_all_files_recursive()
     print("finished")
+    print(f'{Format.GREEN}all files were extracted to {dir_path}{Format.NOCOLOR}')
+    delete_original_zip_files(zip_files_list)
 
 
 if __name__ == '__main__':
