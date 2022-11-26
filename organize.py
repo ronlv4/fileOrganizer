@@ -81,6 +81,7 @@ def extract_all_zip_files(zip_path_list: List[Path]):
         thread.start()
     for thread in threads:
         thread.join()
+    verbose_print('all threads finished executing')
 
 
 def unite_all_files_recursive():
